@@ -105,7 +105,9 @@ const MqttHandler = {
             clientId: this._config.clientId,
             keepalive: this._config.keepalive,
             reconnectPeriod: this._config.reconnectPeriod,
-            clean: true
+            connectTimeout: 10000,
+            clean: true,
+            protocolVersion: 4
         };
 
         // 如果有认证信息
@@ -115,6 +117,13 @@ const MqttHandler = {
         if (this._config.password) {
             options.password = this._config.password;
         }
+
+        console.log('[MQTT] 连接参数:', JSON.stringify({
+            broker: this._config.broker,
+            clientId: options.clientId,
+            username: options.username || '(无)',
+            protocolVersion: options.protocolVersion
+        }));
 
         try {
             console.log('[MQTT] 正在连接:', this._config.broker);
@@ -152,6 +161,26 @@ const MqttHandler = {
             // 触发回调
             if (this._callbacks.onConnect) {
                 this._callbacks.onConnect();
+            }
+        });
+
+        // 服务器确认连接（可检测认证失败）
+        this._client.on('connack', (packet) => {
+            console.log('[MQTT] CONNACK 返回码:', packet.returnCode);
+            if (packet.returnCode !== 0) {
+                const reasonMap = {
+                    1: '协议版本不支持',
+                    2: '客户端ID被拒绝',
+                    3: '服务器不可用',
+                    4: '用户名或密码错误',
+                    5: '未授权'
+                };
+                const reason = reasonMap[packet.returnCode] || `未知错误(${packet.returnCode})`;
+                console.error('[MQTT] 连接被拒绝:', reason);
+                DataStore.addLog('error', `连接被服务器拒绝: ${reason}`);
+                if (this._callbacks.onError) {
+                    this._callbacks.onError(new Error(reason));
+                }
             }
         });
 

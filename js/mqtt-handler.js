@@ -106,16 +106,24 @@ const MqttHandler = {
             return;
         }
 
+        // 强制校验broker地址，防止使用无效地址
+        if (!this._config.broker || !this._config.broker.startsWith('wss://') || !this._config.broker.includes('emqxsl.cn')) {
+            console.warn('[MQTT] broker地址异常，已重置为默认值:', this._config.broker);
+            this._config.broker = 'wss://iea05920.ala.cn-hangzhou.emqxsl.cn:8084/mqtt';
+            Utils.storage.remove('mqtt_config');
+        }
+
         // 断开已有连接
         this.disconnect();
 
         const options = {
             clientId: this._config.clientId,
             keepalive: this._config.keepalive,
-            reconnectPeriod: this._config.reconnectPeriod,
+            reconnectPeriod: 5000,
             connectTimeout: 10000,
             clean: true,
-            protocolVersion: 4
+            protocolVersion: 4,
+            rejectUnauthorized: false
         };
 
         // 如果有认证信息

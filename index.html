@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="IoT物联网设备数据可视化监控平台 - 实时MQTT数据监控">
+    <meta name="theme-color" content="#0a0e17">
+    <title>IoT Monitor - 物联网数据可视化监控平台</title>
+
+    <!-- 样式表 -->
+    <link rel="stylesheet" href="css/style.css">
+
+    <!-- ECharts 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <!-- MQTT.js 客户端库 -->
+    <script src="https://cdn.jsdelivr.net/npm/mqtt@5.3.3/dist/mqtt.min.js"></script>
+</head>
+<body>
+    <div class="app-container">
+
+        <!-- ==================== 顶部导航栏 ==================== -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <div class="logo-icon">IoT</div>
+                    <div>
+                        <div class="logo-text">IoT Monitor</div>
+                        <div class="logo-sub">Data Visualization Platform</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="header-center">
+                <div class="connection-status">
+                    <div id="connectionIndicator" class="connection-indicator disconnected"></div>
+                    <span id="statusText">未连接</span>
+                </div>
+
+                <div class="device-select-wrapper">
+                    <label>设备:</label>
+                    <select id="deviceSelect" class="device-select">
+                        <option value="">-- 选择设备 --</option>
+                    </select>
+                </div>
+
+                <div id="deviceStatus" class="device-status-indicator offline">
+                    <span class="status-dot"></span>
+                    <span class="status-label">离线</span>
+                </div>
+            </div>
+
+            <div class="header-right">
+                <div class="header-stats">
+                    <div class="header-stat">
+                        <span>接收:</span>
+                        <span id="receivedCount" class="stat-value">0</span>
+                    </div>
+                    <div class="header-stat">
+                        <span>设备:</span>
+                        <span id="onlineCount" class="stat-value">0/0</span>
+                    </div>
+                    <div class="header-stat">
+                        <span>均温:</span>
+                        <span id="avgTemp" class="stat-value">--</span>
+                    </div>
+                    <div class="header-stat">
+                        <span>均湿:</span>
+                        <span id="avgHumi" class="stat-value">--</span>
+                    </div>
+                </div>
+                <div id="systemClock" class="system-clock">--</div>
+            </div>
+        </header>
+
+        <!-- ==================== 主内容区 ==================== -->
+        <main class="main-content">
+
+            <!-- ===== 左侧边栏 - 连接配置与设备列表 ===== -->
+            <aside class="sidebar">
+                <!-- MQTT连接配置 -->
+                <div class="sidebar-section">
+                    <div class="sidebar-title">MQTT 连接配置</div>
+
+                    <div class="form-group">
+                        <label class="form-label">服务器地址 (WebSocket)</label>
+                        <input type="text" id="inputBroker" class="form-input"
+                               placeholder="wss://broker.emqx.com:8084/mqtt">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">订阅主题 (Topic)</label>
+                        <input type="text" id="inputTopic" class="form-input"
+                               placeholder="iot/sensor/data">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">用户名 (可选)</label>
+                        <input type="text" id="inputUsername" class="form-input"
+                               placeholder="留空则匿名连接">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">密码 (可选)</label>
+                        <input type="password" id="inputPassword" class="form-input"
+                               placeholder="留空则无密码">
+                    </div>
+
+                    <div class="btn-group">
+                        <button id="btnConnect" class="btn btn-primary btn-block">连接</button>
+                        <button id="btnDisconnect" class="btn btn-outline">断开</button>
+                    </div>
+                </div>
+
+                <!-- 快捷操作 -->
+                <div class="sidebar-section">
+                    <div class="sidebar-title">快捷操作</div>
+                    <div class="btn-group" style="flex-wrap: wrap;">
+                        <button id="btnDemo" class="btn btn-outline btn-sm">演示模式</button>
+                        <button id="btnAnomaly" class="btn btn-outline btn-sm">模拟异常</button>
+                        <button id="btnThreshold" class="btn btn-outline btn-sm">阈值设置</button>
+                        <button id="btnExport" class="btn btn-outline btn-sm">导出数据</button>
+                    </div>
+                </div>
+
+                <!-- 设备列表 -->
+                <div class="sidebar-section" style="flex: 1; overflow: hidden;">
+                    <div class="sidebar-title">设备状态</div>
+                    <div id="deviceStatusList" class="device-status-list">
+                        <div class="empty-state">暂无设备连接</div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- ===== 右侧内容区 ===== -->
+            <div class="content-area">
+
+                <!-- 数据卡片行 -->
+                <div class="data-cards-row">
+                    <div class="data-card" data-sensor="temperature">
+                        <div class="card-header">
+                            <span class="card-label">温度</span>
+                            <span class="card-icon">🌡</span>
+                        </div>
+                        <div class="card-value" id="valTemp">--<span class="card-unit">°C</span></div>
+                        <div class="card-trend">Temperature</div>
+                    </div>
+
+                    <div class="data-card" data-sensor="humidity">
+                        <div class="card-header">
+                            <span class="card-label">湿度</span>
+                            <span class="card-icon">💧</span>
+                        </div>
+                        <div class="card-value" id="valHumi">--<span class="card-unit">%</span></div>
+                        <div class="card-trend">Humidity</div>
+                    </div>
+
+                    <div class="data-card" data-sensor="pressure">
+                        <div class="card-header">
+                            <span class="card-label">气压</span>
+                            <span class="card-icon">🔵</span>
+                        </div>
+                        <div class="card-value" id="valPressure">--<span class="card-unit">hPa</span></div>
+                        <div class="card-trend">Pressure</div>
+                    </div>
+
+                    <div class="data-card" data-sensor="light">
+                        <div class="card-header">
+                            <span class="card-label">光照</span>
+                            <span class="card-icon">☀</span>
+                        </div>
+                        <div class="card-value" id="valLight">--<span class="card-unit">lux</span></div>
+                        <div class="card-trend">Light Intensity</div>
+                    </div>
+
+                    <div class="data-card" data-sensor="voltage">
+                        <div class="card-header">
+                            <span class="card-label">电压</span>
+                            <span class="card-icon">🔋</span>
+                        </div>
+                        <div class="card-value" id="valVoltage">--<span class="card-unit">V</span></div>
+                        <div class="card-trend">Voltage · <span id="valRssi">--</span></div>
+                    </div>
+                </div>
+
+                <!-- 仪表盘行 -->
+                <div class="gauge-row">
+                    <div class="gauge-card">
+                        <div id="gaugeTemp" class="gauge-chart"></div>
+                    </div>
+                    <div class="gauge-card">
+                        <div id="gaugeHumi" class="gauge-chart"></div>
+                    </div>
+                    <div class="gauge-card">
+                        <div id="gaugePressure" class="gauge-chart"></div>
+                    </div>
+                    <div class="gauge-card">
+                        <div id="gaugeLight" class="gauge-chart"></div>
+                    </div>
+                </div>
+
+                <!-- 实时趋势图 -->
+                <div class="chart-section">
+                    <div class="chart-header">
+                        <div class="chart-title">实时数据趋势</div>
+                        <div class="sensor-tabs">
+                            <button class="sensor-tab active" data-sensor="temperature">温度</button>
+                            <button class="sensor-tab" data-sensor="humidity">湿度</button>
+                            <button class="sensor-tab" data-sensor="pressure">气压</button>
+                            <button class="sensor-tab" data-sensor="light">光照</button>
+                            <button class="sensor-tab" data-sensor="voltage">电压</button>
+                        </div>
+                    </div>
+                    <div id="realtimeChart" class="chart-container"></div>
+                </div>
+
+                <!-- 底部面板: 日志 / 告警 / 历史 -->
+                <div class="bottom-panel">
+                    <div class="panel-tabs">
+                        <button class="panel-tab active" data-panel="logs">实时日志</button>
+                        <button class="panel-tab" data-panel="alerts">
+                            告警记录
+                            <span id="alertCount" style="display:none;background:var(--danger);color:#fff;padding:0 5px;border-radius:8px;font-size:10px;margin-left:4px;">0</span>
+                        </button>
+                        <button class="panel-tab" data-panel="history">历史数据</button>
+                        <div class="panel-actions" style="margin-left:auto;display:flex;align-items:center;">
+                            <button id="btnClearLog" class="btn btn-outline btn-sm">清除日志</button>
+                        </div>
+                    </div>
+
+                    <div id="logContainer" class="panel-content" data-panel="logs">
+                        <div class="empty-state">等待数据接收...</div>
+                    </div>
+
+                    <div id="alertContainer" class="panel-content" data-panel="alerts" style="display:none;">
+                        <div class="empty-state">暂无告警记录</div>
+                    </div>
+
+                    <div id="historyContainer" class="panel-content" data-panel="history" style="display:none;">
+                        <div class="empty-state">暂无历史数据</div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- ==================== 告警弹窗容器 ==================== -->
+    <div id="alertPopupContainer"></div>
+
+    <!-- ==================== Toast提示容器 ==================== -->
+    <div id="toastContainer"></div>
+
+    <!-- ==================== 阈值设置模态框 ==================== -->
+    <div id="thresholdModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">告警阈值设置</div>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="threshold-grid">
+                <div class="threshold-row">
+                    <span class="threshold-label">温度 (°C)</span>
+                    <input type="number" id="threshold_temperature_min" class="form-input" step="0.1" value="-10">
+                    <span class="threshold-separator">~</span>
+                    <input type="number" id="threshold_temperature_max" class="form-input" step="0.1" value="50">
+                </div>
+                <div class="threshold-row">
+                    <span class="threshold-label">湿度 (%)</span>
+                    <input type="number" id="threshold_humidity_min" class="form-input" step="1" value="10">
+                    <span class="threshold-separator">~</span>
+                    <input type="number" id="threshold_humidity_max" class="form-input" step="1" value="90">
+                </div>
+                <div class="threshold-row">
+                    <span class="threshold-label">气压 (hPa)</span>
+                    <input type="number" id="threshold_pressure_min" class="form-input" step="1" value="950">
+                    <span class="threshold-separator">~</span>
+                    <input type="number" id="threshold_pressure_max" class="form-input" step="1" value="1060">
+                </div>
+                <div class="threshold-row">
+                    <span class="threshold-label">光照 (lux)</span>
+                    <input type="number" id="threshold_light_min" class="form-input" step="1" value="0">
+                    <span class="threshold-separator">~</span>
+                    <input type="number" id="threshold_light_max" class="form-input" step="1" value="1500">
+                </div>
+                <div class="threshold-row">
+                    <span class="threshold-label">电压 (V)</span>
+                    <input type="number" id="threshold_voltage_min" class="form-input" step="0.1" value="2.8">
+                    <span class="threshold-separator">~</span>
+                    <input type="number" id="threshold_voltage_max" class="form-input" step="0.1" value="4.2">
+                </div>
+            </div>
+            <div style="margin-top: 20px; text-align: right;">
+                <button class="btn btn-outline modal-close" style="margin-right: 8px;">取消</button>
+                <button id="btnSaveThreshold" class="btn btn-primary">保存设置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== JS模块加载 ==================== -->
+    <script src="js/utils.js"></script>
+    <script src="js/data-store.js"></script>
+    <script src="js/mqtt-handler.js"></script>
+    <script src="js/chart-manager.js"></script>
+    <script src="js/alert-manager.js"></script>
+    <script src="js/demo-data.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

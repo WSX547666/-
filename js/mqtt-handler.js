@@ -56,10 +56,18 @@ const MqttHandler = {
         // 从本地存储恢复上次的配置（仅当外部未传入对应配置时）
         const savedConfig = Utils.storage.get('mqtt_config');
         if (savedConfig) {
-            if (!config.broker) this._config.broker = savedConfig.broker || this._config.broker;
-            if (!config.topic) this._config.topic = savedConfig.topic || this._config.topic;
-            if (!config.username) this._config.username = savedConfig.username || this._config.username;
-            if (!config.password) this._config.password = savedConfig.password || this._config.password;
+            // 验证broker地址格式，防止旧的错误地址覆盖
+            const savedBroker = savedConfig.broker;
+            if (savedBroker && savedBroker.startsWith('wss://') && savedBroker.includes(':')) {
+                if (!config.broker) this._config.broker = savedBroker;
+                if (!config.topic && savedConfig.topic) this._config.topic = savedConfig.topic;
+                if (!config.username && savedConfig.username) this._config.username = savedConfig.username;
+                if (!config.password && savedConfig.password) this._config.password = savedConfig.password;
+            } else {
+                // 清除无效的保存配置
+                console.warn('[MQTT] 检测到无效的已保存broker地址，已清除:', savedBroker);
+                Utils.storage.remove('mqtt_config');
+            }
         }
 
         console.log('[MQTT] 初始化完成，Broker:', this._config.broker);

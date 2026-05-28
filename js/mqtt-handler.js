@@ -15,8 +15,8 @@ const MqttHandler = {
         broker: 'wss://iea05920.ala.cn-hangzhou.emqxsl.cn:8084/mqtt',
         topic: 'iot/sensor/data',
         clientId: '',
-        username: '',
-        password: '',
+        username: 'WSX',
+        password: 'wsx547',
         keepalive: 60,
         reconnectPeriod: 5000
     },
@@ -53,13 +53,13 @@ const MqttHandler = {
         // 注册回调
         Object.assign(this._callbacks, callbacks);
 
-        // 从本地存储恢复上次的配置
+        // 从本地存储恢复上次的配置（仅当外部未传入对应配置时）
         const savedConfig = Utils.storage.get('mqtt_config');
         if (savedConfig) {
-            this._config.broker = savedConfig.broker || this._config.broker;
-            this._config.topic = savedConfig.topic || this._config.topic;
-            this._config.username = savedConfig.username || this._config.username;
-            this._config.password = savedConfig.password || this._config.password;
+            if (!config.broker) this._config.broker = savedConfig.broker || this._config.broker;
+            if (!config.topic) this._config.topic = savedConfig.topic || this._config.topic;
+            if (!config.username) this._config.username = savedConfig.username || this._config.username;
+            if (!config.password) this._config.password = savedConfig.password || this._config.password;
         }
 
         console.log('[MQTT] 初始化完成，Broker:', this._config.broker);

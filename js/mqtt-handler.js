@@ -12,7 +12,7 @@ const MqttHandler = {
 
     // 连接配置
     _config: {
-        broker: 'wss://broker.emqx.com:8084/mqtt',
+        broker: 'wss://iea05920.ala.cn-hangzhou.emqxsl.cn:8084/mqtt',
         topic: 'iot/sensor/data',
         clientId: '',
         username: '',
